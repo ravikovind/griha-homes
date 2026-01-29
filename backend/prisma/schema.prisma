@@ -1,0 +1,172 @@
+// GrihaHomes Database Schema
+// PostgreSQL + PostGIS
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [postgis, uuid_ossp(map: "uuid-ossp")]
+}
+
+// ===================
+// ENUMS
+// ===================
+
+enum UserRole {
+  user
+  owner
+  admin
+}
+
+enum PropertyType {
+  flat
+  house
+  villa
+  commercial
+}
+
+enum PropertyFor {
+  rent
+  sale
+}
+
+enum FurnishingType {
+  furnished
+  semi_furnished
+  unfurnished
+}
+
+enum ParkingType {
+  none
+  open
+  covered
+}
+
+enum InquiryStatus {
+  pending
+  contacted
+  closed
+}
+
+// ===================
+// MODELS
+// ===================
+
+model User {
+  id                   String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  phone                String    @unique
+  name                 String    @default("GrihaHomes User")
+  email                String?   @unique
+  password             String?
+  photo                String?
+  role                 UserRole  @default(user)
+  status               String    @default("active") // active, inactive
+  failedLoginAttempts  Int       @default(0) @map("failed_login_attempts")
+  lockedUntil          DateTime? @map("locked_until")
+  deletedAt            DateTime? @map("deleted_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  devices    Device[]
+  properties Property[]
+  inquiries  Inquiry[]
+
+  @@index([phone])
+  @@index([email])
+  @@map("users")
+}
+
+model Device {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String?
+  platform  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("devices")
+}
+
+model Property {
+  id           String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ownerId      String         @map("owner_id") @db.Uuid
+  propertyType PropertyType   @map("property_type")
+  propertyFor  PropertyFor    @map("property_for")
+  title        String?
+  description  String?
+  rooms        Int?
+  bathrooms    Int?
+  sizeSqft     Int?           @map("size_sqft")
+  floor        Int?
+  price        Int?
+  deposit      Int?
+  maintenance  Int?
+  furnishing   FurnishingType?
+  parking      ParkingType?
+  amenities    String[]       @default([])
+  address      String
+  city         String
+  state        String
+  pincode      String?
+  latitude     Float?
+  longitude    Float?
+  status       String         @default("active") // active, inactive, rented, sold
+  availableFrom DateTime?     @map("available_from")
+  expiresAt    DateTime?      @map("expires_at")
+  deletedAt    DateTime?      @map("deleted_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  // Relations
+  owner     User            @relation(fields: [ownerId], references: [id])
+  media     PropertyMedia[]
+  inquiries Inquiry[]
+
+  @@index([ownerId])
+  @@index([city])
+  @@index([propertyType, propertyFor, status, price])
+  @@map("properties")
+}
+
+model PropertyMedia {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  propertyId String   @map("property_id") @db.Uuid
+  publicId   String   @map("public_id") // Cloudinary public_id
+  type       String   @default("image") // image or video
+  position   Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  // Relations
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_media")
+}
+
+model Inquiry {
+  id          String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  propertyId  String        @map("property_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  message     String?
+  status      InquiryStatus @default(pending)
+  adminNotes  String?       @map("admin_notes")
+  contactedAt DateTime?     @map("contacted_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([userId])
+  @@index([status])
+  @@map("inquiries")
+}
